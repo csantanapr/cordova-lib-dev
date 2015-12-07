@@ -1,0 +1,13 @@
+coverage
+node_modules
+npm-debug.log
+../npm-debug.log
+temp
+.DS_Store
+spec-cordova/fixtures/projects/native
+spec-cordova/fixtures/projects/cordova
+.idea/*
+.gitcore
+*.jar
+src/plugman/defaults.json
+cordova-lib/src/plugman/defaults.json
