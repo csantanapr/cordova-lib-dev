@@ -147,6 +147,7 @@ module.exports = function plugin(command, targets, opts) {
                         var fetchOptions = {
                             searchpath: searchPath,
                             noregistry: opts.noregistry,
+                            nohooks: opts.nohooks,
                             link: opts.link,
                             pluginInfoProvider: pluginInfoProvider,
                             variables: opts.cli_variables,
@@ -182,7 +183,12 @@ module.exports = function plugin(command, targets, opts) {
                                 searchpath: searchPath,
                                 noregistry: opts.noregistry,
                                 link: opts.link,
-                                pluginInfoProvider: pluginInfoProvider
+                                pluginInfoProvider: pluginInfoProvider,
+                                // Set up platform to install asset files/js modules to <platform>/platform_www dir
+                                // instead of <platform>/www. This is required since on each prepare platform's www dir is changed
+                                // and files from 'platform_www' merged into 'www'. Thus we need to persist these
+                                // files platform_www directory, so they'll be applied to www on each prepare.
+                                usePlatformWww: true
                             };
 
                             events.emit('verbose', 'Calling plugman.install on plugin "' + pluginInfo.dir + '" for platform "' + platform);
@@ -270,7 +276,7 @@ module.exports = function plugin(command, targets, opts) {
                 return hooksRunner.fire('after_plugin_rm', opts);
             });
         case 'search':
-            return hooksRunner.fire('before_plugin_search')
+            return hooksRunner.fire('before_plugin_search', opts)
             .then(function() {
                 var link = 'http://cordova.apache.org/plugins/';
                 if (opts.plugins.length > 0) {
@@ -284,7 +290,7 @@ module.exports = function plugin(command, targets, opts) {
                 
                 return Q.resolve();
             }).then(function() {
-                return hooksRunner.fire('after_plugin_search');
+                return hooksRunner.fire('after_plugin_search', opts);
             });
         case 'save':
             // save the versions/folders/git-urls of currently installed plugins into config.xml
@@ -380,9 +386,9 @@ function getVersionFromConfigFile(plugin, cfg){
     return pluginEntry && pluginEntry.spec;
 }
 
-function list(projectRoot, hooksRunner) {
+function list(projectRoot, hooksRunner, opts) {
     var pluginsList = [];
-    return hooksRunner.fire('before_plugin_ls')
+    return hooksRunner.fire('before_plugin_ls', opts)
     .then(function() {
         var pluginsDir = path.join(projectRoot, 'plugins');
         // TODO: This should list based off of platform.json, not directories within plugins/
@@ -427,7 +433,7 @@ function list(projectRoot, hooksRunner) {
         events.emit('results', lines.join('\n'));
     })
     .then(function() {
-        return hooksRunner.fire('after_plugin_ls');
+        return hooksRunner.fire('after_plugin_ls', opts);
     })
     .then(function() {
         return pluginsList;

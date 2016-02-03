@@ -93,6 +93,12 @@ function addHelper(cmd, hooksRunner, projectRoot, targets, opts) {
                     platform = null;
                 }
 
+                if(platform === 'amazon-fireos') {
+                    events.emit('warn', 'amazon-fireos has been deprecated. Please use android instead.');
+                }
+                if(platform === 'wp8') {
+                    events.emit('warn', 'wp8 has been deprecated. Please use windows instead.');
+                }
                 if (platform && !spec && cmd == 'add') {
                     events.emit('verbose', 'No version supplied. Retrieving version from config.xml...');
                     spec = getVersionFromConfigFile(platform, cfg);
@@ -490,9 +496,9 @@ function check(hooksRunner, projectRoot) {
     return result.promise;
 }
 
-function list(hooksRunner, projectRoot) {
+function list(hooksRunner, projectRoot, opts) {
     var platforms_on_fs = cordova_util.listPlatforms(projectRoot);
-    return hooksRunner.fire('before_platform_ls')
+    return hooksRunner.fire('before_platform_ls', opts)
     .then(function() {
         // Acquire the version number of each platform we have installed, and output that too.
         return Q.all(platforms_on_fs.map(function(p) {
@@ -505,18 +511,32 @@ function list(hooksRunner, projectRoot) {
             });
         }));
     }).then(function(platformsText) {
+        platformsText = addDeprecatedInformationToPlatforms(platformsText);
         var results = 'Installed platforms: ' + platformsText.sort().join(', ') + '\n';
         var available = Object.keys(platforms).filter(hostSupports);
 
         available = available.filter(function(p) {
             return platforms_on_fs.indexOf(p) < 0; // Only those not already installed.
         });
-        results += 'Available platforms: ' + available.sort().join(', ');
+
+        available = addDeprecatedInformationToPlatforms(available);
+        results += 'Available platforms: ' + available.sort().join(', ');        
 
         events.emit('results', results);
     }).then(function() {
-        return hooksRunner.fire('after_platform_ls');
+        return hooksRunner.fire('after_platform_ls', opts);
     });
+}
+
+function addDeprecatedInformationToPlatforms(platformsList){
+    platformsList = platformsList.map(function(p){
+        var platformKey = p.split(' ')[0]; //Remove Version Information
+        if(platforms[platformKey].deprecated){
+            p = p.concat(' ', '(deprecated)');
+        }
+        return p;
+    });
+    return platformsList;
 }
 
 // Returns a promise.
@@ -585,7 +605,7 @@ function platform(command, targets, opts) {
         case 'save':
             return save(hooksRunner, projectRoot, opts);
         default:
-            return list(hooksRunner, projectRoot);
+            return list(hooksRunner, projectRoot, opts);
     }
 }
 
@@ -628,7 +648,16 @@ function installPluginsForNewPlatform(platform, projectRoot, opts) {
             plugin = path.basename(plugin);
 
             var options = {
-                searchpath: opts.searchpath
+                searchpath: opts.searchpath,
+                // Set up platform to install asset files/js modules to <platform>/platform_www dir
+                // instead of <platform>/www. This is required since on each prepare platform's www dir is changed
+                // and files from 'platform_www' merged into 'www'. Thus we need to persist these
+                // files platform_www directory, so they'll be applied to www on each prepare.
+
+                // NOTE: there is another code path for plugin installation (see CB-10274 and the
+                // related PR: https://github.com/apache/cordova-lib/pull/360) so we need to
+                // specify the option below in both places
+                usePlatformWww: true
             };
 
             // Get plugin variables from fetch.json if have any and pass them as cli_variables to plugman
